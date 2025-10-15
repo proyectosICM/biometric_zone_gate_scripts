@@ -6,7 +6,7 @@ from datetime import datetime
 WS_URL = "ws://telemetriaperu.com:7788/ws"
 
 # Cambia aquí: "fingerprint" | "rfid" | "password" | "invalid" | "malformed"
-MESSAGE_MODE = "fingerprint"
+MESSAGE_MODE = "password"
 
 # ------------------- REGISTRO DEL DISPOSITIVO -------------------
 VALID_REGISTER = {
