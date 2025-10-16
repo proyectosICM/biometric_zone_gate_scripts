@@ -6,7 +6,7 @@ from datetime import datetime
 # ------------------- CONFIGURACIÓN -------------------
 WS_URL = "ws://telemetriaperu.com:7788/ws"
 TIMEOUT = 5
-SIMULAR_ERROR = False  # 👈 Cambia a True para probar fallos
+SIMULAR_ERROR = False  # 👈 Cambia a True para probar respuestas con error
 
 # ------------------- MENSAJE DE REGISTRO -------------------
 VALID_REGISTER = {
@@ -55,22 +55,50 @@ async def handle_server_message(ws, message):
     print(f"\n📨 Mensaje recibido del servidor: cmd={cmd}")
     print(json.dumps(data, indent=2))
 
-    # --- DELETE USER ---
-    if cmd == "deleteuser":
+    # --- ENABLE / DISABLE USER ---
+    if cmd == "enableuser":
         enrollid = data.get("enrollid")
-        backupnum = data.get("backupnum")
-        print(f"🗑️ Servidor solicita eliminar usuario: enrollid={enrollid}, backupnum={backupnum}")
-        response = {"ret": "deleteuser", "result": not SIMULAR_ERROR}
+        enflag = data.get("enflag")
+        action = "HABILITAR" if enflag == 1 else "DESHABILITAR"
+        print(f"🔐 Servidor solicita {action} usuario enrollid={enrollid}")
+
+        response = {"ret": "enableuser", "result": not SIMULAR_ERROR}
         if SIMULAR_ERROR:
             response["reason"] = 1
+
         await asyncio.sleep(1)
         await ws.send(json.dumps(response))
         print("📤 Respuesta enviada:", json.dumps(response, indent=2))
+
+    # --- DELETE USER ---
+    elif cmd == "deleteuser":
+        enrollid = data.get("enrollid")
+        print(f"🗑️ Servidor solicita eliminar usuario: enrollid={enrollid}")
+
+        response = {"ret": "deleteuser", "result": not SIMULAR_ERROR}
+        if SIMULAR_ERROR:
+            response["reason"] = 1
+
+        await asyncio.sleep(1)
+        await ws.send(json.dumps(response))
+        print("📤 Respuesta enviada:", json.dumps(response, indent=2))
+
+    # --- CLEAN ALL USERS ---
+    elif cmd == "cleanuser":
+        print("🧹 Servidor solicita limpiar TODOS los usuarios del dispositivo (solo simulación).")
+        response = {"ret": "cleanuser", "result": not SIMULAR_ERROR}
+        if SIMULAR_ERROR:
+            response["reason"] = 1
+
+        await asyncio.sleep(2)
+        await ws.send(json.dumps(response))
+        print("📤 Respuesta enviada al servidor:", json.dumps(response, indent=2))
 
     # --- GET USERNAME ---
     elif cmd == "getusername":
         enrollid = data.get("enrollid")
         print(f"🧩 Servidor solicita nombre de usuario: enrollid={enrollid}")
+
         response = {
             "ret": "getusername",
             "result": not SIMULAR_ERROR,
@@ -78,6 +106,7 @@ async def handle_server_message(ws, message):
         }
         if SIMULAR_ERROR:
             response["reason"] = 1
+
         await asyncio.sleep(1)
         await ws.send(json.dumps(response))
         print("📤 Respuesta enviada:", json.dumps(response, indent=2))
@@ -88,27 +117,46 @@ async def handle_server_message(ws, message):
         records = data.get("record", [])
 
         if count > 50 or len(records) > 50:
-            print("⚠️ Se recibieron más de 50 registros, truncando a 50 registros.")
+            print("⚠️ Se recibieron más de 50 registros, truncando a 50.")
             records = records[:50]
             count = 50
 
-        print(f"📝 Servidor solicita actualizar nombres de usuario ({count} registros):")
+        print(f"📝 Servidor solicita actualizar nombres ({count} registros):")
         for r in records:
             print(f"   ➤ enrollid={r.get('enrollid')}, name={r.get('name')}")
 
-        # Simular respuesta
         response = {"ret": "setusername", "result": not SIMULAR_ERROR}
         if SIMULAR_ERROR:
             response["reason"] = 1
+
         await asyncio.sleep(1)
         await ws.send(json.dumps(response))
         print("📤 Respuesta enviada:", json.dumps(response, indent=2))
 
-    # --- Otros comandos ---
-    elif cmd in ["setuserinfo", "getuserinfo"]:
-        print(f"ℹ️ Comando {cmd} recibido (omitido en este simulador).")
+    # --- INITIALIZE SYSTEM ---
+    elif cmd == "initsys":
+        print("🧩 Servidor solicita INITIALIZE SYSTEM (solo enviar respuesta, no borrar nada).")
+
+        response = {"ret": "initsys", "result": not SIMULAR_ERROR}
+        if SIMULAR_ERROR:
+            response["reason"] = 1
+
+        await asyncio.sleep(1)
+        await ws.send(json.dumps(response))
+        print("📤 Respuesta enviada al servidor:", json.dumps(response, indent=2))
+
+    # --- REBOOT ---
+    elif cmd == "reboot":
+        print("🔄 Servidor solicita REBOOT. El dispositivo se reiniciará inmediatamente.")
+        print("💡 Simulación: cerrando conexión y terminando script para simular reinicio...")
+        await ws.close()
+
+        # Detiene el loop de asyncio de manera limpia
+        loop = asyncio.get_running_loop()
+        loop.stop()
+
     else:
-        print("⚙️ Comando no reconocido, ignorando.")
+        print("⚙️ Comando no reconocido, ignorando...")
 
 async def message_consumer(ws, queue):
     while True:
