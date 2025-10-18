@@ -36,12 +36,12 @@ VALID_REGISTER = {
 }
 
 # -------------------------------------------------
-# FUNCIONES
+# FUNCIONES AUXILIARES
 # -------------------------------------------------
 def generar_logs_realistas():
     """
-    Genera 10 registros por usuario (5 entradas y 5 salidas)
-    para los usuarios 1, 4 y 5 con horarios coherentes.
+    Genera 30 registros (entradas/salidas) de prueba
+    para usuarios 1, 4 y 5 con fechas recientes.
     """
     logs = []
     usuarios = [1, 4, 5]
@@ -49,38 +49,35 @@ def generar_logs_realistas():
 
     for user_id in usuarios:
         for i in range(5):
-            # Día desplazado hacia atrás según i
             fecha = base_date - timedelta(days=i)
 
-            # Entrada
-            entrada_time = fecha + timedelta(minutes=user_id * 2)
-            salida_time = entrada_time + timedelta(hours=8)
+            entrada = fecha + timedelta(minutes=user_id * 2)
+            salida = entrada + timedelta(hours=8)
 
             logs.append({
                 "enrollid": user_id,
-                "time": entrada_time.strftime("%Y-%m-%d %H:%M:%S"),
-                "mode": 0,    # huella
-                "inout": 0,   # entrada
+                "time": entrada.strftime("%Y-%m-%d %H:%M:%S"),
+                "mode": 0,  # huella
+                "inout": 0,  # entrada
                 "event": 0
             })
             logs.append({
                 "enrollid": user_id,
-                "time": salida_time.strftime("%Y-%m-%d %H:%M:%S"),
+                "time": salida.strftime("%Y-%m-%d %H:%M:%S"),
                 "mode": 0,
-                "inout": 1,   # salida
+                "inout": 1,  # salida
                 "event": 0
             })
 
-    # En total 3 usuarios × 10 registros = 30 logs
-    logs.sort(key=lambda x: x["time"])  # orden cronológico
+    logs.sort(key=lambda x: x["time"])
     return logs
 
 
 async def send_registration(ws):
-    """Envía el registro del dispositivo"""
-    reg_msg = json.dumps(VALID_REGISTER)
+    """Envía el registro inicial del dispositivo."""
+    msg = json.dumps(VALID_REGISTER)
     print("\n➡️ Enviando registro del dispositivo...")
-    await ws.send(reg_msg)
+    await ws.send(msg)
     try:
         response = await asyncio.wait_for(ws.recv(), timeout=TIMEOUT)
         print("📩 Respuesta de registro recibida:")
@@ -89,70 +86,82 @@ async def send_registration(ws):
         print("⚠️ No se recibió respuesta al registro.")
 
 
-async def responder_getnewlog(ws, stn):
-    """Simula respuesta del dispositivo al comando getnewlog"""
+# -------------------------------------------------
+# MANEJO DE COMANDOS DEL SERVIDOR
+# -------------------------------------------------
+async def responder_getalllog(ws, stn):
+    """
+    Simula respuesta al comando getalllog.
+    Envía los logs en paquetes de 10 registros hasta agotarlos.
+    """
     logs = generar_logs_realistas()
-
-    # Dividimos en paquetes de 10 registros
     chunk_size = 10
     paquetes = [logs[i:i + chunk_size] for i in range(0, len(logs), chunk_size)]
 
-    # Control para decidir qué paquete enviar
-    if not hasattr(responder_getnewlog, "paquete_index"):
-        responder_getnewlog.paquete_index = 0
+    # Control de índice de paquete (se mantiene entre llamadas)
+    if not hasattr(responder_getalllog, "index"):
+        responder_getalllog.index = 0
 
-    if responder_getnewlog.paquete_index < len(paquetes):
-        paquete = paquetes[responder_getnewlog.paquete_index]
+    if stn:
+        print("🔁 Reiniciando secuencia de paquetes (stn=true)")
+        responder_getalllog.index = 0
+
+    if responder_getalllog.index < len(paquetes):
+        paquete = paquetes[responder_getalllog.index]
         response = {
-            "ret": "getnewlog",
+            "ret": "getalllog",
             "result": True,
             "count": len(paquete),
-            "from": responder_getnewlog.paquete_index * chunk_size,
-            "to": responder_getnewlog.paquete_index * chunk_size + len(paquete) - 1,
+            "from": responder_getalllog.index * chunk_size,
+            "to": responder_getalllog.index * chunk_size + len(paquete) - 1,
             "record": paquete
         }
 
-        print(f"📤 Enviando paquete #{responder_getnewlog.paquete_index + 1} "
-              f"({response['from']} - {response['to']}) con {len(paquete)} registros...")
+        print(f"📤 Enviando paquete #{responder_getalllog.index + 1} "
+              f"({response['from']}–{response['to']}) con {len(paquete)} registros...")
         await ws.send(json.dumps(response, ensure_ascii=False))
-        responder_getnewlog.paquete_index += 1
+        responder_getalllog.index += 1
+
     else:
-        # Fin: no hay más registros
+        # No hay más registros
         end_response = {
-            "ret": "getnewlog",
+            "ret": "getalllog",
             "result": True,
             "count": 0,
             "from": 0,
             "to": 0,
             "record": []
         }
-        print("📭 Enviando confirmación final (sin más logs)...")
+        print("📭 No hay más registros, enviando respuesta final...")
         await ws.send(json.dumps(end_response, ensure_ascii=False))
-        responder_getnewlog.paquete_index = 0  # reset para futuras solicitudes
+        responder_getalllog.index = 0
 
 
 async def handle_server_message(ws, message):
-    """Procesa mensajes recibidos del servidor"""
+    """Procesa los mensajes recibidos del servidor."""
     try:
         data = json.loads(message)
     except json.JSONDecodeError:
-        print("⚠️ Mensaje inválido (no es JSON):", message)
+        print("⚠️ Mensaje no es JSON válido:", message)
         return
 
     cmd = data.get("cmd") or data.get("ret") or "unknown"
     print(f"\n📨 Mensaje recibido: cmd={cmd}")
-    print(json.dumps(data, indent=2))
+    print(json.dumps(data, indent=2, ensure_ascii=False))
 
-    if cmd == "getnewlog":
+    if cmd == "getalllog":
         stn = data.get("stn", False)
-        await responder_getnewlog(ws, stn)
-        print("✅ Respuesta a GETNEWLOG enviada correctamente.")
+        await responder_getalllog(ws, stn)
+        print("✅ Respuesta a GETALLLOG enviada correctamente.")
     else:
         print("ℹ️ Comando no implementado, ignorando.")
 
 
+# -------------------------------------------------
+# LOOP PRINCIPAL
+# -------------------------------------------------
 async def message_consumer(ws, queue):
-    """Consume mensajes del servidor"""
+    """Procesa mensajes del servidor en segundo plano."""
     while True:
         message = await queue.get()
         await handle_server_message(ws, message)
@@ -183,5 +192,8 @@ async def run():
         print("❌ Error general:", ex)
 
 
+# -------------------------------------------------
+# EJECUCIÓN
+# -------------------------------------------------
 if __name__ == "__main__":
     asyncio.run(run())

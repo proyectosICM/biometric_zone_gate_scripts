@@ -39,7 +39,7 @@ VALID_SENDLOG = {
         # Usuario 1 - Entrada
         {
             "enrollid": 1,
-            "time": "2025-10-13 09:00:00",
+            "time": "2025-10-16 09:00:00",
             "mode": 0,   # 0=fp (huella)
             "inout": 0,  # 0=in
             "event": 0   # evento normal
@@ -47,7 +47,7 @@ VALID_SENDLOG = {
         # Usuario 1 - Salida
         {
             "enrollid": 1,
-            "time": "2025-10-13 17:00:00",
+            "time": "2025-10-16 17:00:00",
             "mode": 0,
             "inout": 1,  # 1=out
             "event": 0
@@ -55,7 +55,7 @@ VALID_SENDLOG = {
         # Usuario 2 - Entrada
         {
             "enrollid": 4,
-            "time": "2025-10-13 09:15:00",
+            "time": "2025-10-16 09:15:00",
             "mode": 0,
             "inout": 0,
             "event": 0
@@ -63,7 +63,7 @@ VALID_SENDLOG = {
         # Usuario 2 - Salida
         {
             "enrollid": 4,
-            "time": "2025-10-13 17:10:00",
+            "time": "2025-10-16 17:10:00",
             "mode": 0,
             "inout": 1,
             "event": 0
